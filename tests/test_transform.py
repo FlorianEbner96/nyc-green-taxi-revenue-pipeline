@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from data_pipeline.transform import clean, daily_revenue
 
@@ -27,6 +28,17 @@ def test_clean_drops_invalid_rows():
     cleaned = clean(make_trips(), start="2025-01-01", end="2025-04-01")
     assert len(cleaned) == 3
     assert (cleaned["total_amount"] > 0).all()
+
+
+def test_clean_rejects_non_numeric_amount():
+    trips = pd.DataFrame(
+        {
+            "lpep_pickup_datetime": pd.to_datetime(["2025-01-01 08:00"]),
+            "total_amount": ["not a number"],
+        }
+    )
+    with pytest.raises(TypeError):
+        clean(trips, start="2025-01-01", end="2025-04-01")
 
 
 def test_daily_revenue_sums_per_day():

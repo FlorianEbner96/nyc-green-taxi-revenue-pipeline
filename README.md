@@ -109,13 +109,11 @@ Note that `total_amount` includes tips, and cash tips are not recorded in this d
 
 ## Review questions
 
-*Draft answers, to be revised before handing in.*
-
 **1. What are the steps you took to complete the project?**
-Wrote a download script that stages the three monthly files, explored one file in a notebook (columns, types, missing values, date and amount ranges), wrote down the cleaning rules, then built the transform (`clean`, `daily_revenue`), the load step and an entry point, with tests for the transform. Finally, compared the row counts before and after cleaning (146,486 to 145,743).
+I wrote a download script that stages the three monthly files, explored one file in a notebook (columns, types, missing values, date and amount ranges) and wrote down the cleaning rules. Then I built the transform (`clean`, `daily_revenue`), the load step and an entry point, with tests for the transform. I compared the row counts before and after cleaning (146,486 to 145,743). Finally, I wrapped the stages in a Prefect flow with retries on the download and packaged it in a Dockerfile.
 
 **2. What challenges did you face?**
 The monthly files are not clean month by month: they contain trips from neighbouring months, negative amounts and rows with missing payment types. The component amount columns also do not add up to `total_amount`, so the question was which column to trust and what to do with the rest (see "Data quality").
 
 **3. What would you do differently if you had more time?**
-Ask a domain expert about the inconsistent amount columns, add more tests (the loading and the download), and extend the pipeline with a Prefect flow with retries on the download.
+I would ask a domain expert about the inconsistent amount columns, add more tests (the loading and the download, with a mocked HTTP response), and serve the Prefect flow as a scheduled deployment instead of running it by hand (see "Possible extensions").
