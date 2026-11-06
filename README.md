@@ -99,13 +99,13 @@ We therefore:
 
 Note that `total_amount` includes tips, and cash tips are not recorded in this data.
 
-## Status
+## Possible extensions
 
-- [x] Step 1: Extract
-- [x] Step 2: Explore
-- [x] Step 3: Transform and load, with tests
-- [x] Step 4 (bonus): Prefect flow
-- [x] Docker image: builds and runs the flow, output matches the local run
+- **ELT variant:** load the raw files into DuckDB and do the cleaning and the daily aggregation as SQL models with dbt, keeping the raw table so the rules can be changed and re-run.
+- **More tests:** the download (with a mocked HTTP response) and the load step are not covered yet.
+- **Scheduling:** serve the flow as a Prefect deployment that runs on a schedule, and run it with a Prefect server container next to it.
+- **Data quality:** clarify the inconsistent amount columns with the data owner (see "Data quality") and then add revenue breakdowns, for example by payment type or tips.
+- **Monitoring:** alert when the share of dropped rows is unusually high.
 
 ## Review questions
 
