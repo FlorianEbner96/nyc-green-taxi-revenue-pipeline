@@ -67,7 +67,7 @@ tests/
 
 ## Design decisions
 
-**ETL, not ELT.** The data is small (about 146k rows, 3 MB per file), so we transform it in pandas before writing the result. There is no database to load raw data into, which is what ELT would need. With a warehouse and dbt, loading the raw data first and transforming it in SQL would also make sense.
+**ETL, not ELT.** The data is small (about 146k rows, 3 MB per file), so I transform it in pandas before writing the result. There is no database to load raw data into, which is what ELT would need. With a warehouse and dbt, loading the raw data first and transforming it in SQL would also make sense.
 
 **Extract is repeatable.** Each file is written to a `.part` file first and renamed only when the download is complete, so a failed download never looks like a good file. A file that already exists is skipped.
 
@@ -77,7 +77,7 @@ tests/
 |---|---|
 | Revenue = `total_amount` | It is the amount charged to the customer. See "Data quality" below. |
 | A trip belongs to the day of its **pickup** | The pickup is when the trip started and is never later than the dropoff. |
-| Keep trips with a pickup from 2025-01-01 up to (not including) 2025-04-01 | The monthly files contain trips from neighbouring months (e.g. 43 February trips sit in the January file). We filter on the date, not on the file name. |
+| Keep trips with a pickup from 2025-01-01 up to (not including) 2025-04-01 | The monthly files contain trips from neighbouring months (e.g. 43 February trips sit in the January file). I filter on the date, not on the file name. |
 | Drop rows with a missing pickup time or amount | They cannot be assigned to a day or summed. |
 | Drop rows with `total_amount <= 0` | Refunds, disputes and no-charge trips, not revenue. |
 
@@ -85,17 +85,17 @@ Rows with a missing `payment_type` (about 4%) are kept: their amounts are valid.
 
 `clean()` and `daily_revenue()` do not depend on a month or a file name, so they work on any month of Green Taxi data. The date window is a setting in `config.py`.
 
-## Data quality: what we did not fix
+## Data quality: what I did not fix
 
-In about 14% of the rows `total_amount` is not equal to the sum of `fare_amount`, `extra`, `mta_tax`, `tip_amount`, `tolls_amount` and the surcharges. The differences come in a few fixed sizes (for example -1.00, -3.75, +2.75), which points to systematic recording differences, for instance `mta_tax` recorded as 1.50 while the total only includes 0.50, and surcharges that appear inside `extra` as well as in their own columns. These explanations come from the arithmetic only; we have not confirmed them.
+In about 14% of the rows `total_amount` is not equal to the sum of `fare_amount`, `extra`, `mta_tax`, `tip_amount`, `tolls_amount` and the surcharges. The differences come in a few fixed sizes (for example -1.00, -3.75, +2.75), which points to systematic recording differences, for instance `mta_tax` recorded as 1.50 while the total only includes 0.50, and surcharges that appear inside `extra` as well as in their own columns. These explanations come from the arithmetic only; I have not confirmed them.
 
-We therefore:
+I therefore:
 
 - use **only** `total_amount` and the pickup time, and leave the component columns out of the output,
 - do **not** drop rows because their parts disagree with the total,
 - do **not** try to repair the component columns, since that would mean guessing.
 
-> **In a real-world setting** we would not stop here. We would contact the people who produce or know the data, such as the taxi company, the licensing authority (the TLC) or whoever operates the data collection, because they have domain knowledge we lack. They can tell us what `extra` and `mta_tax` really contain, whether surcharges are meant to be counted twice, and which values are errors and which are legitimate. Getting this clarified and, if needed, fixed at the source matters as soon as we want to use these columns later, for example for tip or fare analysis, features for a machine learning model, or any production pipeline that others depend on. Until then, the safest choice is to rely on the one column that is consistent and to document what we did not trust.
+> **In a real-world setting** I would not stop here. I would contact the people who produce or know the data, such as the taxi company, the licensing authority (the TLC) or whoever operates the data collection, because they have domain knowledge I lack. They can tell me what `extra` and `mta_tax` really contain, whether surcharges are meant to be counted twice, and which values are errors and which are legitimate. Getting this clarified and, if needed, fixed at the source matters as soon as I want to use these columns later, for example for tip or fare analysis, features for a machine learning model, or any production pipeline that others depend on. Until then, the safest choice is to rely on the one column that is consistent and to document what I did not trust.
 
 Note that `total_amount` includes tips, and cash tips are not recorded in this data.
 
