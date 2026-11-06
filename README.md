@@ -18,7 +18,33 @@ uv run python -m data_pipeline.pipeline  # run the whole pipeline
 uv run pytest                            # run the tests
 ```
 
-Running the pipeline again is safe: files that are already in `data/raw/` are not downloaded a second time.
+Running the pipeline again is safe: files that are already in `data/raw/` are not downloaded a second time. To force a fresh download, delete the file in `data/raw/`.
+
+### Prefect flow
+
+The same stages as Prefect tasks inside one flow. Only the download task has retries (3 retries, 10 seconds apart), since it is the only step that depends on the network.
+
+```bash
+uv run python -m data_pipeline.flow
+```
+
+> **Windows:** if the Prefect console output crashes with a `UnicodeEncodeError`, set `PYTHONUTF8=1`. If the run fails with `Failed to reach API at http://127.0.0.1:4200`, your Prefect profile has a saved server address from another project that is not running. Either start that server, or run once with `PREFECT_API_URL=""` to use Prefect's temporary local server.
+
+### Docker
+
+The flow can run as a container. The image contains only the code and its dependencies; `data/` is mounted from your machine, so the downloads and the result stay in your project folder.
+
+```bash
+docker build -t green-taxi-pipeline .
+docker run --rm -v "$(pwd)/data:/app/data" green-taxi-pipeline
+```
+
+The result is `data/processed/daily_revenue.csv`.
+
+- **PowerShell:** use `-v "${PWD}/data:/app/data"`.
+- **Git Bash on Windows:** put `MSYS_NO_PATHCONV=1` in front of the `docker run` command. Without it, Git Bash rewrites `/app/data` into a Windows path, the folder is not mounted, and the container runs on its own copy of the data, which is discarded when it exits.
+
+**Why a batch job and not a service?** The container runs the pipeline once and exits (`--rm` removes it afterwards), so there is nothing left running in Docker Desktop; only the image remains. That fits this project: the data is a fixed set of three months, and the run takes about ten seconds. Running it as an always-on microservice, for example with a schedule or an API that triggers runs, would need more setup (a long-running Prefect process with a deployment, probably a Prefect server container as well). That would make sense for data that arrives continuously, but it is more than a project of this size needs.
 
 ## Project structure
 
@@ -30,9 +56,11 @@ exploration_notebooks/  01_explore_green_taxi.ipynb: data exploration only, not 
 src/data_pipeline/
   config.py             URL, months, folders, date window, column names
   extract.py            download the monthly files, read the staged files
-  transform.py          clean() and daily_revenue(): pure functions, no file paths
+  transform.py          clean() and daily_revenue() (trip count + revenue per day): pure functions, no file paths
   load.py               write the result to data/processed/
   pipeline.py           entry point, runs the stages in order
+  flow.py               the same stages as a Prefect flow with retries
+Dockerfile              runs the Prefect flow in a container
 tests/
   test_transform.py     tests for the cleaning and aggregation
 ```
@@ -76,7 +104,8 @@ Note that `total_amount` includes tips, and cash tips are not recorded in this d
 - [x] Step 1: Extract
 - [x] Step 2: Explore
 - [x] Step 3: Transform and load, with tests
-- [ ] Step 4 (bonus): Prefect flow
+- [x] Step 4 (bonus): Prefect flow
+- [x] Docker image: builds and runs the flow, output matches the local run
 
 ## Review questions
 

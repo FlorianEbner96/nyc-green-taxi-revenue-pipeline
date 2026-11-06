@@ -32,4 +32,5 @@ def test_clean_drops_invalid_rows():
 def test_daily_revenue_sums_per_day():
     result = daily_revenue(clean(make_trips(), start="2025-01-01", end="2025-04-01"))
     assert result["revenue"].tolist() == [15.5, 7.0]
+    assert result["trip_count"].tolist() == [2, 1]
     assert result["date"].dt.strftime("%Y-%m-%d").tolist() == ["2025-01-01", "2025-01-02"]

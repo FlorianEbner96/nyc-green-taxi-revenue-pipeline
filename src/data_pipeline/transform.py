@@ -17,13 +17,12 @@ def clean(df: pd.DataFrame, start: str = WINDOW_START, end: str = WINDOW_END) ->
 
 
 def daily_revenue(df: pd.DataFrame) -> pd.DataFrame:
-    """Sum the revenue per pickup day."""
+    """Count the trips and sum the revenue per pickup day."""
     out = (
         df.groupby(df[PICKUP_COL].dt.normalize())[REVENUE_COL]
-        .sum()
-        .round(2)
+        .agg(trip_count="size", revenue="sum")
         .rename_axis("date")
-        .rename("revenue")
         .reset_index()
     )
+    out["revenue"] = out["revenue"].round(2)
     return out
