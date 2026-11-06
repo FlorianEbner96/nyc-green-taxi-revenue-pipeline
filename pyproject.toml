@@ -27,7 +27,7 @@ dev = [
 ]
 
 [tool.ty.environment]
-root = [".", "solution/src"]
+root = ["."]
 
 [tool.uv]
 required-version = ">=0.13.5"
