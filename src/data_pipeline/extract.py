@@ -2,12 +2,17 @@
 
 from pathlib import Path
 
+import pandas as pd
 import requests
 
-BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data"
-YEAR = 2025
-MONTHS = [1, 2, 3]
-RAW_DIR = Path("data/raw")
+from data_pipeline.config import (
+    BASE_URL,
+    MONTHS,
+    PICKUP_COL,
+    RAW_DIR,
+    REVENUE_COL,
+    YEAR,
+)
 
 
 def build_url(year: int, month: int) -> str:
@@ -36,6 +41,17 @@ def download_month(year: int, month: int, target_dir: Path = RAW_DIR) -> Path:
 
 def extract(year: int = YEAR, months: list[int] = MONTHS) -> list[Path]:
     return [download_month(year, m) for m in months]
+
+
+def read_staged(raw_dir: Path = RAW_DIR) -> pd.DataFrame:
+    """Read all staged files into one DataFrame, only with the columns we need."""
+    files = sorted(raw_dir.glob("*.parquet"))
+    if not files:
+        raise FileNotFoundError(f"No parquet files in {raw_dir}. Run the extract stage first.")
+    return pd.concat(
+        (pd.read_parquet(f, columns=[PICKUP_COL, REVENUE_COL]) for f in files),
+        ignore_index=True,
+    )
 
 
 if __name__ == "__main__":

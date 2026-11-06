@@ -1,121 +1,92 @@
-# Data Pipeline Project
+# NYC Green Taxi: Daily Revenue Pipeline
 
-Use this repository as a **template** for your data pipeline project. You will build a pipeline that takes raw NYC taxi trip records and turns them into a processed result. The project is open-ended: the brief sets the goal, and the structure, tools, and implementation choices are yours to make. Create pull requests in your own copy even if you are working alone, and use them to track your progress.
+A small ETL pipeline that downloads the NYC **Green Taxi** trip records for January to March 2025, cleans them, and calculates the **revenue per day**.
 
-## Learning Objectives
+```
+download (extract) -> data/raw/*.parquet -> clean + aggregate (transform) -> data/processed/daily_revenue.csv (load)
+```
 
-By the end of this repository, you should be able to:
+Result for Jan-Mar 2025: 90 days, 3,401,753.17 total revenue, from 145,743 of 146,486 trips (743 dropped during cleaning).
 
-- Write a script that downloads a public dataset into a local staging directory.
-- Build a pipeline that reads staged Parquet files and aggregates them into daily metrics.
-- Separate a pipeline into distinct extract, transform, and load stages.
-- Explain the difference between ETL and ELT, and justify which one your pipeline uses.
-- Orchestrate a pipeline with Prefect (stretch goal).
+## How to run
 
-## Project Brief
+Requirements: [uv](https://docs.astral.sh/uv/getting-started/installation/) and the Python version in [`.python-version`](.python-version).
 
-In this project you are going to build a data pipeline that processes the `Green Taxi Trips` portion of the [NYC Taxi Trip dataset](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page).
+```bash
+uv sync                                  # install dependencies and the package
+uv run python -m data_pipeline.pipeline  # run the whole pipeline
+uv run pytest                            # run the tests
+```
 
-1. Write a script that downloads the data for the first three months of 2025 and stores it in a local staging directory.
-2. Write an ETL or ELT pipeline that reads the locally staged files, processes the data, and calculates revenue per day.
+Running the pipeline again is safe: files that are already in `data/raw/` are not downloaded a second time.
 
-Bonus task, if you have time:
+## Project structure
 
-1. Use Prefect for workflow orchestration.
+```
+data/
+  raw/                  staged downloads, never edited (ignored by git)
+  processed/            daily_revenue.csv (ignored by git)
+exploration_notebooks/  01_explore_green_taxi.ipynb: data exploration only, not part of the pipeline
+src/data_pipeline/
+  config.py             URL, months, folders, date window, column names
+  extract.py            download the monthly files, read the staged files
+  transform.py          clean() and daily_revenue(): pure functions, no file paths
+  load.py               write the result to data/processed/
+  pipeline.py           entry point, runs the stages in order
+tests/
+  test_transform.py     tests for the cleaning and aggregation
+```
 
-## Learning Path
+## Design decisions
 
-### Additional Folders and Files
+**ETL, not ELT.** The data is small (about 146k rows, 3 MB per file), so we transform it in pandas before writing the result. There is no database to load raw data into, which is what ELT would need. With a warehouse and dbt, loading the raw data first and transforming it in SQL would also make sense.
 
-| File / Folder | Description |
+**Extract is repeatable.** Each file is written to a `.part` file first and renamed only when the download is complete, so a failed download never looks like a good file. A file that already exists is skipped.
+
+**Cleaning rules** (found in the exploration notebook, valid for any month):
+
+| Rule | Why |
 |---|---|
-| [**solution**](solution/) | A complete local ETL implementation with its own README, scripts, package, and tests. |
-| [**pyproject.toml**](pyproject.toml) | Project configuration and dependencies. |
-| [**uv.lock**](uv.lock) | Dependency lock file. |
+| Revenue = `total_amount` | It is the amount charged to the customer. See "Data quality" below. |
+| A trip belongs to the day of its **pickup** | The pickup is when the trip started and is never later than the dropoff. |
+| Keep trips with a pickup from 2025-01-01 up to (not including) 2025-04-01 | The monthly files contain trips from neighbouring months (e.g. 43 February trips sit in the January file). We filter on the date, not on the file name. |
+| Drop rows with a missing pickup time or amount | They cannot be assigned to a day or summed. |
+| Drop rows with `total_amount <= 0` | Refunds, disputes and no-charge trips, not revenue. |
 
-## Setup
+Rows with a missing `payment_type` (about 4%) are kept: their amounts are valid.
 
-Use [uv](https://docs.astral.sh/uv/getting-started/installation/) 0.13.5 or newer
-and Python 3.13.17 or a newer 3.13 patch release, as defined in
-[`.python-version`](.python-version).
+`clean()` and `daily_revenue()` do not depend on a month or a file name, so they work on any month of Green Taxi data. The date window is a setting in `config.py`.
 
-> [!NOTE]
-> Throughout these steps, text in angle brackets like `<repo-name>` is a **placeholder**. Replace it, including the `< >` brackets, with your own value. For example, `cd <repo-name>` becomes `cd mle-data-pipeline-project`.
+## Data quality: what we did not fix
 
-### 1. Create the Repository from the Template
+In about 14% of the rows `total_amount` is not equal to the sum of `fare_amount`, `extra`, `mta_tax`, `tip_amount`, `tolls_amount` and the surcharges. The differences come in a few fixed sizes (for example -1.00, -3.75, +2.75), which points to systematic recording differences, for instance `mta_tax` recorded as 1.50 while the total only includes 0.50, and surcharges that appear inside `extra` as well as in their own columns. These explanations come from the arithmetic only; we have not confirmed them.
 
-Click **Use this template** on GitHub.
+We therefore:
 
-When creating the repository:
+- use **only** `total_amount` and the pickup time, and leave the component columns out of the output,
+- do **not** drop rows because their parts disagree with the total,
+- do **not** try to repair the component columns, since that would mean guessing.
 
-- Set yourself as the **Owner**
-- Choose a repository name
-- Disable **Include all branches**
-- Click **Create repository**
+> **In a real-world setting** we would not stop here. We would contact the people who produce or know the data, such as the taxi company, the licensing authority (the TLC) or whoever operates the data collection, because they have domain knowledge we lack. They can tell us what `extra` and `mta_tax` really contain, whether surcharges are meant to be counted twice, and which values are errors and which are legitimate. Getting this clarified and, if needed, fixed at the source matters as soon as we want to use these columns later, for example for tip or fare analysis, features for a machine learning model, or any production pipeline that others depend on. Until then, the safest choice is to rely on the one column that is consistent and to document what we did not trust.
 
-> [!IMPORTANT]
-> If you are working in pairs or groups, only **one person** should complete this step.
+Note that `total_amount` includes tips, and cash tips are not recorded in this data.
 
----
+## Status
 
-### 2. Add Collaborators (Pairs/Groups Only)
+- [x] Step 1: Extract
+- [x] Step 2: Explore
+- [x] Step 3: Transform and load, with tests
+- [ ] Step 4 (bonus): Prefect flow
 
-If working with teammates:
+## Review questions
 
-1. Open the repository on GitHub
-2. Go to **Settings → Collaborators**
-3. Add your teammates as collaborators
-4. Share the repository link with your team
+*Draft answers, to be revised before handing in.*
 
-Teammates should accept the invitation before continuing.
+**1. What are the steps you took to complete the project?**
+Wrote a download script that stages the three monthly files, explored one file in a notebook (columns, types, missing values, date and amount ranges), wrote down the cleaning rules, then built the transform (`clean`, `daily_revenue`), the load step and an entry point, with tests for the transform. Finally, compared the row counts before and after cleaning (146,486 to 145,743).
 
----
+**2. What challenges did you face?**
+The monthly files are not clean month by month: they contain trips from neighbouring months, negative amounts and rows with missing payment types. The component amount columns also do not add up to `total_amount`, so the question was which column to trust and what to do with the rest (see "Data quality").
 
-### 3. Clone the Repository
-
-Copy the SSH URL from the **Code** button on GitHub, then run:
-
-```bash
-git clone <copied-ssh-url>
-```
-
-The copied SSH URL will look like `git@github.com:<your-username>/<repo-name>.git`.
-
----
-
-### 4. Move into the Project Folder and Install Dependencies
-
-This installs all dependencies and creates a virtual environment in `.venv/`.
-
-```bash
-cd <repo-name>
-uv sync
-```
-
----
-
-### 5. Open the Repository in VS Code
-
-> [!NOTE]
-> Make sure you open VS Code from the project root so it automatically detects the environment created by `uv sync`.
-
-Launch VS Code in the project root folder:
-
-```bash
-code .
-```
-
-If you create a notebook to explore the data, select the Python environment created by `uv sync` as the kernel.
-
-## Reference Solution
-
-This repository includes a complete local reference implementation in [solution/](solution/).
-Use it to compare implementation choices and expected outputs. It is one way to solve the project, not the required structure for yours.
-
-See [solution/README.md](solution/README.md) for how to run it and how its files fit together.
-
-## Answer the Following Questions
-
-1. What are the steps you took to complete the project?
-2. What challenges did you face?
-3. What would you do differently if you had more time?
+**3. What would you do differently if you had more time?**
+Ask a domain expert about the inconsistent amount columns, add more tests (the loading and the download), and extend the pipeline with a Prefect flow with retries on the download.
